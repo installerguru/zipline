@@ -1,0 +1,44 @@
+services:
+  postgresql:
+    image: postgres:16
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRESQL_USER:-zipline}
+      POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD:?POSTGRESQL_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRESQL_DB:-zipline}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRESQL_USER:-zipline}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zipline:
+    image: ghcr.io/diced/zipline:latest
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    # Keep DATABASE_URL here to ensure a single source of truth from .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    volumes:
+      - /home/zipline/uploads:/zipline/uploads
+      - /home/zipline/public:/zipline/public
+      - /home/zipline/themes:/zipline/themes
+    healthcheck:
+      # use curl (usually present). If missing, switch to 'CMD-SHELL', 'wget -q --spider ...'
+      test: ['CMD', 'curl', '-fsS', 'http://0.0.0.0:3000/api/healthcheck']
+      interval: 15s
+      timeout: 2s
+      retries: 2
+
+volumes:
+  pgdata:
